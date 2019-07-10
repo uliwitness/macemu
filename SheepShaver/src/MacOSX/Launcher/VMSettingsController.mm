@@ -262,25 +262,19 @@ static NSString *makeRelativeIfNecessary(NSString *path)
   [open setAccessoryView:isCDROM];
   [open setAllowsMultipleSelection:NO];
   [open setTreatsFilePackagesAsDirectories:YES];
-  [open beginSheetForDirectory: [[NSFileManager defaultManager] currentDirectoryPath]
-                          file: @"Unknown"
-                modalForWindow: [self window]
-                 modalDelegate: self
-                didEndSelector: @selector(_addDiskEnd: returnCode: contextInfo:)
-                   contextInfo: nil];
-}
-
-- (void) _addDiskEnd: (NSOpenPanel *) open returnCode: (int) theReturnCode contextInfo: (void *) theContextInfo
-{
-  if (theReturnCode == NSOKButton) {
-    DiskType *d = [[[DiskType alloc] init] autorelease];
-    [d setPath:makeRelativeIfNecessary([open filename])];
-
-    [d setIsCDROM:([isCDROMcheckbox state] == NSOnState)];
-
-    [diskArray addObject: d]; 
-    [disks reloadData];
-  }
+  [open setDirectoryURL:[NSURL URLWithString: [[NSFileManager defaultManager] currentDirectoryPath]]];
+  [open beginSheetModalForWindow: [self window]
+			 completionHandler:^(NSInteger result) {
+				 if (result == NSOKButton) {
+					 DiskType *d = [[[DiskType alloc] init] autorelease];
+					 [d setPath:makeRelativeIfNecessary([open filename])];
+					 
+					 [d setIsCDROM:([isCDROMcheckbox state] == NSOnState)];
+					 
+					 [diskArray addObject: d];
+					 [disks reloadData];
+				 }
+			 }];
 }
 
 - (IBAction) removeDisk: (id) sender
@@ -297,33 +291,27 @@ static NSString *makeRelativeIfNecessary(NSString *path)
   NSSavePanel *save = [NSSavePanel savePanel];
   [save setAccessoryView: diskSaveSize];
   [save setTreatsFilePackagesAsDirectories:YES];
-  [save beginSheetForDirectory: [[NSFileManager defaultManager] currentDirectoryPath]
-                          file: @"New.dsk"
-                modalForWindow: [self window]
-                 modalDelegate: self
-                didEndSelector: @selector(_createDiskEnd: returnCode: contextInfo:)
-                   contextInfo: nil];
-}
-
-- (void) _createDiskEnd: (NSSavePanel *) save returnCode: (int) theReturnCode contextInfo: (void *) theContextInfo
-{
-  if (theReturnCode == NSOKButton) {
-    int size = [diskSaveSizeField intValue];
-    if (size >= 0 && size <= 10000) {
-      char cmd[1024];
-      snprintf(cmd, sizeof(cmd), "dd if=/dev/zero \"of=%s\" bs=1024k count=%d", [[save filename] UTF8String], [diskSaveSizeField intValue]);
-      int ret = system(cmd);
-      if (ret == 0) {
-        DiskType *d = [[[DiskType alloc] init] autorelease];
-        [d setPath:makeRelativeIfNecessary([save filename])];
-        [d setIsCDROM:NO];
-
-        [diskArray addObject: d];
-        [disks reloadData];
-      }
-    }
-  }
-  [(NSData *)theContextInfo release];
+  [save setNameFieldStringValue: @"New.dsk"];
+  [save setDirectoryURL:[NSURL URLWithString: [[NSFileManager defaultManager] currentDirectoryPath]]];
+  [save beginSheetModalForWindow: [self window]
+			   completionHandler:^(NSInteger result) {
+				   if (result == NSOKButton) {
+					   int size = [diskSaveSizeField intValue];
+					   if (size >= 0 && size <= 10000) {
+						   char cmd[1024];
+						   snprintf(cmd, sizeof(cmd), "dd if=/dev/zero \"of=%s\" bs=1024k count=%d", [[save filename] UTF8String], [diskSaveSizeField intValue]);
+						   int ret = system(cmd);
+						   if (ret == 0) {
+							   DiskType *d = [[[DiskType alloc] init] autorelease];
+							   [d setPath:makeRelativeIfNecessary([save filename])];
+							   [d setIsCDROM:NO];
+							   
+							   [diskArray addObject: d];
+							   [disks reloadData];
+						   }
+					   }
+				   }
+				 }];
 }
 
 - (IBAction) useRawKeyCodesClicked: (id) sender
@@ -338,19 +326,13 @@ static NSString *makeRelativeIfNecessary(NSString *path)
   [open setCanChooseDirectories:NO];
   [open setAllowsMultipleSelection:NO];
   [open setTreatsFilePackagesAsDirectories:YES];
-  [open beginSheetForDirectory: @""
-                          file: [romFile stringValue]
-                modalForWindow: [self window]
-                 modalDelegate: self
-                didEndSelector: @selector(_browseForROMFileEnd: returnCode: contextInfo:)
-                   contextInfo: nil];
-}
-
-- (void) _browseForROMFileEnd: (NSOpenPanel *) open returnCode: (int) theReturnCode contextInfo: (void *) theContextInfo
-{
-  if (theReturnCode == NSOKButton) {
-    [romFile setStringValue: makeRelativeIfNecessary([open filename])];
-  }
+  [open setNameFieldStringValue: [romFile stringValue]];
+  [open beginSheetModalForWindow: [self window]
+				 completionHandler:^(NSInteger result) {
+					 if (result == NSOKButton) {
+						 [romFile setStringValue: makeRelativeIfNecessary([open filename])];
+					 }
+				 }];
 }
 
 - (IBAction) browseForUnixRootClicked: (id) sender
@@ -359,19 +341,13 @@ static NSString *makeRelativeIfNecessary(NSString *path)
   [open setCanChooseDirectories:YES];
   [open setCanChooseFiles:NO];
   [open setAllowsMultipleSelection:NO];
-  [open beginSheetForDirectory: @""
-                          file: [unixRoot stringValue]
-                modalForWindow: [self window]
-                 modalDelegate: self
-                didEndSelector: @selector(_browseForUnixRootEnd: returnCode: contextInfo:)
-                   contextInfo: nil];
-}
-
-- (void) _browseForUnixRootEnd: (NSOpenPanel *) open returnCode: (int) theReturnCode contextInfo: (void *) theContextInfo
-{
-  if (theReturnCode == NSOKButton) {
-    [unixRoot setStringValue: makeRelativeIfNecessary([open filename])];
-  }
+  [open setNameFieldStringValue: [unixRoot stringValue]];
+  [open beginSheetModalForWindow: [self window]
+				 completionHandler:^(NSInteger result) {
+					 if (result == NSOKButton) {
+						 [unixRoot setStringValue: makeRelativeIfNecessary([open filename])];
+					 }
+				 }];
 }
 
 - (IBAction) browseForKeyCodesFileClicked: (id) sender
@@ -380,19 +356,13 @@ static NSString *makeRelativeIfNecessary(NSString *path)
   [open setCanChooseDirectories:NO];
   [open setAllowsMultipleSelection:NO];
   [open setTreatsFilePackagesAsDirectories:YES];
-  [open beginSheetForDirectory: @""
-                          file: [unixRoot stringValue]
-                modalForWindow: [self window]
-                 modalDelegate: self
-                didEndSelector: @selector(_browseForKeyCodesFileEnd: returnCode: contextInfo:)
-                   contextInfo: nil];
-}
-
-- (void) _browseForKeyCodesFileEnd: (NSOpenPanel *) open returnCode: (int) theReturnCode contextInfo: (void *) theContextInfo
-{
-  if (theReturnCode == NSOKButton) {
-    [rawKeyCodes setStringValue: makeRelativeIfNecessary([open filename])];
-  }
+  [open setNameFieldStringValue: [unixRoot stringValue]];
+  [open beginSheetModalForWindow: [self window]
+				 completionHandler:^(NSInteger result) {
+					 if (result == NSOKButton) {
+						 [rawKeyCodes setStringValue: makeRelativeIfNecessary([open filename])];
+					 }
+				 }];
 }
 
 - (void) cancelEdit: (id) sender
