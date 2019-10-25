@@ -751,6 +751,11 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
 	
+#ifdef __MACOSX__
+    extern void make_window_transparent(SDL_Window * window);
+    make_window_transparent(sdl_window);
+#endif
+    
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which
 	// allows events to be processed as they are generated.

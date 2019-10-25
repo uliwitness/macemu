@@ -52,6 +52,40 @@ void disable_SDL2_macosx_menu_bar_keyboard_shortcuts() {
 	}
 }
 
+void make_window_transparent(SDL_Window * window)
+{
+    if (!window) {
+        return;
+    }
+    
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
+        return;
+    }
+    
+    CGColorRef clearColor = [NSColor clearColor].CGColor;
+    NSWindow *cocoaWindow = wmInfo.info.cocoa.window;
+    NSView *sdlView = cocoaWindow.contentView;
+    sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
+    cocoaWindow.backgroundColor = [NSColor clearColor];
+    cocoaWindow.hasShadow = NO;
+    cocoaWindow.opaque = NO;
+    
+    // make metal layer transparent
+    for (NSView *view in sdlView.subviews) {
+        if ([view.className isEqualToString:@"SDL_cocoametalview"]) {
+            view.layer.opaque = NO;
+            view.layer.backgroundColor = clearColor;
+            return;
+        }
+    }
+
+    // make OpenGL surface transparent
+    GLint zero = 0;
+    [[NSOpenGLContext currentContext] setValues:&zero forParameter:NSOpenGLCPSurfaceOpacity];
+}
+
 bool is_fullscreen_osx(SDL_Window * window)
 {
 	if (!window) {
