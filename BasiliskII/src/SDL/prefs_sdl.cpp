@@ -32,6 +32,9 @@
 prefs_desc platform_prefs_items[] = {
 	{"idlewait", TYPE_BOOLEAN, false,      "sleep when idle"},
 	{"sdlrender", TYPE_STRING, false,      "SDL_Renderer driver (\"auto\", \"software\" (may be faster), etc.)"},
+#ifdef VIDEO_ROOTLESS
+    {"rootless", TYPE_BOOLEAN, false,      "Rootles mode (System 7)"},
+#endif
 	{NULL, TYPE_END, false}	// End of list
 };
 

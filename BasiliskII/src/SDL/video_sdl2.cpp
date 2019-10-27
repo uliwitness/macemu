@@ -65,6 +65,12 @@
 #include "video_blit.h"
 #include "vm_alloc.h"
 
+#ifdef VIDEO_ROOTLESS
+extern void make_window_transparent(SDL_Window * window);
+extern void update_display_mask(int w, int h);
+extern void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect);
+#endif
+
 #define DEBUG 0
 #include "debug.h"
 
@@ -751,9 +757,10 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
 	
-#ifdef __MACOSX__
-    extern void make_window_transparent(SDL_Window * window);
-    make_window_transparent(sdl_window);
+#ifdef VIDEO_ROOTLESS
+    if (PrefsFindBool("rootless")) {
+        make_window_transparent(sdl_window);
+    }
 #endif
     
 	// Some SDL events (regarding some native-window events), need processing
@@ -899,6 +906,11 @@ static int present_sdl_video()
 	}
 	UNLOCK_PALETTE; // passed potential deadlock, can unlock palette
 	
+#ifdef VIDEO_ROOTLESS
+    // Apply mask
+    apply_display_mask(host_surface, sdl_update_video_rect);
+#endif
+
     // Update the host OS' texture
     void * srcPixels = (void *)((uint8_t *)host_surface->pixels +
         sdl_update_video_rect.y * host_surface->pitch +
@@ -1702,6 +1714,9 @@ void VideoInterrupt(void)
 	if (toggle_fullscreen)
 		do_toggle_fullscreen();
 
+#ifdef VIDEO_ROOTLESS
+    update_display_mask(host_surface->w, host_surface->h);
+#endif
 	present_sdl_video();
 
 	// Temporarily give up frame buffer lock (this is the point where

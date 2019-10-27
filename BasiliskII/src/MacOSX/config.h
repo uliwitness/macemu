@@ -821,5 +821,6 @@
 #define X86_64_ASSEMBLY
 #define OPTIMIZED_FLAGS
 #define FPU_IEEE
+#define VIDEO_ROOTLESS
 
 #endif

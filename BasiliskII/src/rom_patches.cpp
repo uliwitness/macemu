@@ -754,6 +754,11 @@ void InstallDrivers(uint32 pb)
 		r.a[0] = pb;
 		Execute68kTrap(0xa000, &r);		// Open()
 	}
+    
+#ifdef VIDEO_ROOTLESS
+    extern void InstallRootlessProc(void);
+    InstallRootlessProc();
+#endif
 }
 
 
