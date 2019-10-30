@@ -35,6 +35,20 @@ static const uint8 rootless_proc[] = {
     0x20, 0x1F,             // move.l (sp)+, d0    ; psn high
     0x22, 0x1F,             // move.l (sp)+, d1    ; psn low
     0x4E, 0x75,             // rts
+    
+    // a0 = GetResource(d0, d1)
+#define GETRESOURCE 38      // offset to this function
+    0x59, 0x4F,             // subq #4,sp          ; result
+    0x2F, 0x00,             // move.l d0,-(sp)     ; type
+    0x3F, 0x01,             // move.w d1,-(sp)     ; size
+    0xA9, 0xA0,             // _GetResource
+    0x20, 0x57,             // movea.l (sp),a0     ; result to a0
+    0x59, 0x4F,             // subq #4, sp         ; result
+    0x2F, 0x08,             // move.l a0,-(sp)     ; handle
+    0xA9, 0xA5,             // _SizeRsrc
+    0x20, 0x1F,             // move.l (sp)+,d0     ; size
+    0x20, 0x5F,             // movea.l (sp)+,a0    ; handle
+    0x4E, 0x75,             // rts
 };
 
 static uint32 rootless_proc_ptr = 0;
@@ -63,6 +77,7 @@ static struct {
 };
 
 void MaskRect(int16 top, int16 left, int16 bottom, int16 right, bool in) {
+    if (top == bottom || left == right) return;
     if (top < 0) top = 0;
     if (left < 0) left = 0;
     
@@ -136,15 +151,110 @@ void MaskRegion(uint32 regionPtr, bool in) {
     }
 }
 
+static uint32 low_mem_map = 0;
+
+uint32 GetLowMemOffset(uint32 addr) {
+    if (low_mem_map == 0) {
+        abort();
+    }
+    
+    uint32 offset = 0;
+    uint32 ptr = low_mem_map;
+    for(;;) {
+        uint16 size = ReadMacInt16(ptr);
+        if (size == 0) break;
+        uint32 lo = ReadMacInt32(ptr+2);
+        ptr += 6;
+        if (addr < lo) {
+            return UINT32_MAX;
+        } else if (addr < (lo+size)) {
+            return offset + (addr-lo);
+        }
+        offset += size;
+    }
+    return UINT32_MAX;
+}
+
+static uint32 GetResource(uint32 type, int16 id, int32* size) {
+    M68kRegisters r;
+    r.d[0] = type;
+    r.d[1] = id;
+    Execute68k(rootless_proc_ptr + GETRESOURCE, &r);
+    if (size) {
+        *size = r.d[0];
+    }
+    return r.a[0];
+}
+
+static void MaskMenuBar() {
+    uint16 menuBarHeight = ReadMacInt16(0x0BAA);
+    MaskRect(0, 0, menuBarHeight, display_mask.w, true);
+}
+
+static void MaskMenu(uint32 mbEntry) {
+    int16 menuTop = ReadMacInt16(mbEntry);
+    int16 menuLeft = ReadMacInt16(mbEntry + 2);
+    int16 menuBottom = ReadMacInt16(mbEntry + 4);
+    int16 menuRight = ReadMacInt16(mbEntry + 6);
+    MaskRect(menuTop, menuLeft-1, menuBottom+1, menuRight+1, true);
+    // shadow
+    MaskRect(menuBottom+1, menuLeft+1, menuBottom+2, menuRight+1, true);
+    MaskRect(menuTop+2, menuRight+1, menuBottom+2, menuRight+2, true);
+}
+
+uint16 menuEntries[16];
+uint16 *lastMenuEntry = menuEntries;
+
+static void MaskMenus(uint32 expandMem, uint32 lowMemPtr) {
+    uint32 emHelpGlobals = ReadMacInt32(expandMem + 0x78);
+    uint16 inMenuSelect = ReadMacInt16(emHelpGlobals + 0x11c);
+    if (!inMenuSelect) {
+        // clean up
+        lastMenuEntry = menuEntries;
+        *lastMenuEntry = 0;
+        return;
+    }
+    
+    uint32 mbSaveLoc = ReadMacInt32(ReadMacInt32(lowMemPtr + GetLowMemOffset(0x0B5C)));
+    if (mbSaveLoc == 0) {
+        // no menu yet
+        return;
+    }
+    
+    uint16 mbEntryOffset = ReadMacInt16(mbSaveLoc);
+    if (lastMenuEntry == menuEntries && *lastMenuEntry == 0) {
+        // first menu
+        *lastMenuEntry = mbEntryOffset;
+    } else if (mbEntryOffset > *lastMenuEntry) {
+        // added menu
+        *(++lastMenuEntry) = mbEntryOffset;
+    } else if (mbEntryOffset < *lastMenuEntry) {
+        // removed menu
+        lastMenuEntry--;
+    }
+    
+    // mask all menus
+    for (uint16 *entry = menuEntries; entry <= lastMenuEntry; entry++) {
+        MaskMenu(mbSaveLoc + *entry);
+    }
+}
+
 void update_display_mask(int w, int h) {
     if (rootless_proc_ptr == 0) {
         return;
     }
     
+    // Check for process manager
     uint32 expandMem = ReadMacInt32(0x02B6);
     uint16 emProcessMgrExists = ReadMacInt16(expandMem + 0x0128);
     if (!emProcessMgrExists) {
         return;
+    }
+    
+    // Read lowmem mapping
+    if (low_mem_map == 0) {
+        uint32 handle = GetResource('lmem', -16458, NULL);
+        low_mem_map = ReadMacInt32(handle);
     }
     
     if (display_mask.w != w || display_mask.h != h) {
@@ -163,9 +273,21 @@ void update_display_mask(int w, int h) {
     uint32 deskPortVisRgn = ReadMacInt32(ReadMacInt32(deskPort + 0x18));
     MaskRegion(deskPortVisRgn, false);
     
-    // show menu bar
-    uint16 menuBarHeight = ReadMacInt16(0x0BAA);
-    MaskRect(0, 0, menuBarHeight, display_mask.w, true);
+    MaskMenuBar();
+    
+    M68kRegisters r;
+    // Find frontmost process
+    for(r.d[0] = 0, r.d[1] = 0;;) {
+        Execute68k(rootless_proc_ptr, &r);
+        uint32_t pEntryPtr = r.d[2];
+        if (r.d[2] == 0) break;
+        
+        uint16 state = ReadMacInt16(pEntryPtr);
+        if (state != 4) break;
+        
+        uint32 lowMemPtr = ReadMacInt32(ReadMacInt32(pEntryPtr + 0x9E));
+        MaskMenus(expandMem, lowMemPtr);
+    }
 }
 
 void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {
