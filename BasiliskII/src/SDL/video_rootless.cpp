@@ -52,6 +52,7 @@ static const uint8 rootless_proc[] = {
 };
 
 static uint32 rootless_proc_ptr = 0;
+static uint32 low_mem_map = 0;
 
 void InstallRootlessProc() {
     // Rootless mode support
@@ -62,6 +63,7 @@ void InstallRootlessProc() {
         rootless_proc_ptr = r.a[0];
         printf("Installing rootless support: 0x%x\n", rootless_proc_ptr);
         Host2Mac_memcpy(rootless_proc_ptr, rootless_proc, sizeof(rootless_proc));
+        low_mem_map = 0;
     } else {
         rootless_proc_ptr = 0;
     }
@@ -150,8 +152,6 @@ void MaskRegion(uint32 regionPtr, bool in) {
         scanline += display_mask.w;
     }
 }
-
-static uint32 low_mem_map = 0;
 
 uint32 GetLowMemOffset(uint32 addr) {
     if (low_mem_map == 0) {
