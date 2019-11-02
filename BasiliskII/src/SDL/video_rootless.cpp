@@ -54,19 +54,25 @@ static const uint8 rootless_proc[] = {
 static uint32 rootless_proc_ptr = 0;
 static uint32 low_mem_map = 0;
 
-void InstallRootlessProc() {
+int16 InstallRootlessProc() {
     // Rootless mode support
     M68kRegisters r;
     if (PrefsFindBool("rootless")) {
+        printf("Installing rootless support\n");
         r.d[0] = sizeof(rootless_proc);
         Execute68kTrap(0xa71e, &r); // NewPtrSysClear()
+        if (r.a[0] == 0) {
+            return memFullErr;
+        }
         rootless_proc_ptr = r.a[0];
-        printf("Installing rootless support: 0x%x\n", rootless_proc_ptr);
         Host2Mac_memcpy(rootless_proc_ptr, rootless_proc, sizeof(rootless_proc));
         low_mem_map = 0;
+        printf("Installed at 0x%x\n", rootless_proc_ptr);
     } else {
         rootless_proc_ptr = 0;
+        low_mem_map = 0;
     }
+    return noErr;
 }
 
 static struct {
