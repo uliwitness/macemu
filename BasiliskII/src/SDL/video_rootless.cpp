@@ -201,42 +201,40 @@ static uint32 GetResource(uint32 type, int16 id, int32* size) {
     return r.a[0];
 }
 
-static SDL_Rect MaskMenuBar() {
-    uint16 menuBarHeight = ReadMacInt16(0x0BAA);
-    MaskRect(0, 0, menuBarHeight, display_mask.w, true);
-    return (SDL_Rect){.x = 0, .y = 0, .w = display_mask.w, .h = menuBarHeight};
-}
-
 static SDL_Rect MaskMenu(uint32 mbEntry) {
     int16 menuTop = ReadMacInt16(mbEntry);
     int16 menuLeft = ReadMacInt16(mbEntry + 2);
     int16 menuBottom = ReadMacInt16(mbEntry + 4);
     int16 menuRight = ReadMacInt16(mbEntry + 6);
-    MaskRect(menuTop, menuLeft-1, menuBottom+1, menuRight+1, true);
+    MaskRect(menuTop-1, menuLeft-1, menuBottom+1, menuRight+1, true);
     // shadow
     MaskRect(menuBottom+1, menuLeft+1, menuBottom+2, menuRight+1, true);
     MaskRect(menuTop+2, menuRight+1, menuBottom+2, menuRight+2, true);
-    return (SDL_Rect){.x = menuLeft-1, .y = menuTop, .w = menuRight - menuLeft + 3, .h = menuBottom - menuTop + 2};
+    return (SDL_Rect){.x = menuLeft-1, .y = menuTop-1, .w = menuRight - menuLeft + 3, .h = menuBottom - menuTop + 2};
 }
 
 uint16 menuEntries[16];
 uint16 *lastMenuEntry = menuEntries;
+uint16 menuBarHeight;
+bool inMenuSelect = false;
+
+static SDL_Rect MaskMenuBar() {
+    if (!inMenuSelect) {
+        menuBarHeight = ReadMacInt16(0x0BAA);
+    }
+    MaskRect(0, 0, menuBarHeight, display_mask.w, true);
+    return (SDL_Rect){.x = 0, .y = 0, .w = display_mask.w, .h = menuBarHeight};
+}
 
 static void MaskMenus(uint32 expandMem, uint32 lowMemPtr, std::vector<SDL_Rect> &rects) {
-    uint32 emHelpGlobals = ReadMacInt32(expandMem + 0x78);
-    uint16 inMenuSelect = ReadMacInt16(emHelpGlobals + 0x11c);
-    if (!inMenuSelect) {
-        // clean up
-        lastMenuEntry = menuEntries;
-        *lastMenuEntry = 0;
-        return;
-    }
-    
     uint32 mbSaveLoc = ReadMacInt32(ReadMacInt32(lowMemPtr + GetLowMemOffset(0x0B5C)));
     if (mbSaveLoc == 0) {
         // no menu yet
+        inMenuSelect = false;
         return;
     }
+    
+    inMenuSelect = true;
     
     uint16 mbEntryOffset = ReadMacInt16(mbSaveLoc);
     if (lastMenuEntry == menuEntries && *lastMenuEntry == 0) {
@@ -351,14 +349,13 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     // clear all
     memset(display_mask.pixels, 0, display_mask.w * display_mask.h);
     
-    // hide desktop
+    // show non-desktop
     uint32 deskPort = ReadMacInt32(0x9E2);
     uint32 deskPortVisRgn = ReadMacInt32(ReadMacInt32(deskPort + 0x18));
     MaskRegion(deskPortVisRgn, false);
     
     bool has_front_process = false;
     std::vector<SDL_Rect> mask_rects;
-    mask_rects.push_back(MaskMenuBar());
     
     M68kRegisters r;
     uint32 rootLayerPtr = 0;
@@ -392,6 +389,9 @@ void update_display_mask(SDL_Window *window, int w, int h) {
             WalkLayerHierarchy(rootLayerPtr, 0, mask_rects);
         }
     }
+    
+    // Menu Bar
+    mask_rects.push_back(MaskMenuBar());
     
     // Cursor
     if (cursor_point_opaque()) {
