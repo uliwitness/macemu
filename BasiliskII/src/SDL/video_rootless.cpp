@@ -78,9 +78,11 @@ int16 InstallRootlessProc() {
 
 static struct {
     uint8_t *pixels;
+    uint8_t *cursorMask;
     int w,h;
 } display_mask = {
     .pixels = NULL,
+    .cursorMask = NULL,
     .w = 0,
     .h = 0
 };
@@ -268,7 +270,7 @@ bool cursor_point_opaque() {
     }
     int32 my = ReadMacInt16(0x0828);
     int32 mx = ReadMacInt16(0x082a);
-    return display_mask.pixels[mx + my * display_mask.w];
+    return display_mask.cursorMask[mx + my * display_mask.w];
 }
 
 static SDL_Rect MaskCursor() {
@@ -342,6 +344,7 @@ void update_display_mask(SDL_Window *window, int w, int h) {
         // new mask
         free(display_mask.pixels);
         display_mask.pixels = (uint8_t*)calloc(1, w*h*2);
+        display_mask.cursorMask = &display_mask.pixels[display_mask.w * display_mask.h];
         display_mask.w = w;
         display_mask.h = h;
     }
@@ -392,6 +395,9 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     
     // Menu Bar
     mask_rects.push_back(MaskMenuBar());
+    
+    // Copy over cursor mask
+    memcpy(display_mask.cursorMask, display_mask.pixels, display_mask.w * display_mask.h);
     
     // Cursor
     if (cursor_point_opaque()) {
