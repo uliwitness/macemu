@@ -19,9 +19,12 @@
  */
 
 #include <Cocoa/Cocoa.h>
+#include <QuartzCore/QuartzCore.h>
+#include <objc/runtime.h>
 #include "sysdeps.h"
 #include "utils_macosx.h"
 #include <SDL.h>
+#include <vector>
 
 #if SDL_VERSION_ATLEAST(2,0,0)
 #include <SDL_syswm.h>
@@ -68,6 +71,9 @@ void make_window_transparent(SDL_Window * window)
     NSWindow *cocoaWindow = wmInfo.info.cocoa.window;
     NSView *sdlView = cocoaWindow.contentView;
     sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
+    CALayer *maskLayer = [CAShapeLayer layer];
+    sdlView.layer.mask = [maskLayer retain];
+    SDL_SetWindowData(window, "maskLayer", maskLayer);
     cocoaWindow.backgroundColor = [NSColor clearColor];
     cocoaWindow.hasShadow = NO;
     cocoaWindow.opaque = NO;
@@ -84,6 +90,19 @@ void make_window_transparent(SDL_Window * window)
     // make OpenGL surface transparent
     GLint zero = 0;
     [[NSOpenGLContext currentContext] setValues:&zero forParameter:NSOpenGLCPSurfaceOpacity];
+}
+
+void update_window_mask_rects(SDL_Window * window, int h, const std::vector<SDL_Rect> &rects)
+{
+    CAShapeLayer *maskLayer = (CAShapeLayer*)SDL_GetWindowData(window, "maskLayer");
+    CGMutablePathRef path = CGPathCreateMutable();
+    for(auto it = rects.begin(); it != rects.end(); ++it) {
+        SDL_Rect rect = *it;
+        CGPathAddRect(path, NULL, CGRectMake(rect.x, rect.y, rect.w, rect.h));
+    }
+    maskLayer.path = path;
+    maskLayer.affineTransform = CGAffineTransformScale(CGAffineTransformMakeTranslation(0, h), 1.0, -1.0);
+    CGPathRelease(path);
 }
 
 bool is_fullscreen_osx(SDL_Window * window)

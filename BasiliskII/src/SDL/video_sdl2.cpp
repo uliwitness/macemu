@@ -67,8 +67,9 @@
 
 #ifdef VIDEO_ROOTLESS
 extern void make_window_transparent(SDL_Window * window);
-extern void update_display_mask(int w, int h);
+extern void update_display_mask(SDL_Window * window, int w, int h);
 extern void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect);
+extern bool cursor_point_opaque(void);
 #endif
 
 #define DEBUG 0
@@ -1715,7 +1716,7 @@ void VideoInterrupt(void)
 		do_toggle_fullscreen();
 
 #ifdef VIDEO_ROOTLESS
-    update_display_mask(host_surface->w, host_surface->h);
+    update_display_mask(sdl_window, host_surface->w, host_surface->h);
 #endif
 	present_sdl_video();
 
@@ -2182,6 +2183,11 @@ static void handle_events(void)
 
 			// Mouse button
 			case SDL_MOUSEBUTTONDOWN: {
+#ifdef VIDEO_ROOTLESS
+                if (!cursor_point_opaque()) {
+                    break;
+                }
+#endif
 				unsigned int button = event.button.button;
 				if (button == SDL_BUTTON_LEFT)
 					ADBMouseDown(0);

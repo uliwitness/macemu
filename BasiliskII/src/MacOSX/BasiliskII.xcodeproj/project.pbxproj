@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		28EFB21E2364DB4F00988A5B /* video_rootless.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 28EFB21C2364DB4F00988A5B /* video_rootless.cpp */; };
+		28EFB222236CE16F00988A5B /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 28EFB221236CE16F00988A5B /* QuartzCore.framework */; };
 		752F26F91F240E51001032B4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 752F26F81F240E51001032B4 /* Foundation.framework */; };
 		752F26FB1F240E69001032B4 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 752F26FA1F240E69001032B4 /* IOKit.framework */; };
 		752F27011F242BAF001032B4 /* prefs_sdl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 752F27001F242BAF001032B4 /* prefs_sdl.cpp */; };
@@ -204,6 +205,7 @@
 
 /* Begin PBXFileReference section */
 		28EFB21C2364DB4F00988A5B /* video_rootless.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = video_rootless.cpp; sourceTree = "<group>"; };
+		28EFB221236CE16F00988A5B /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		752F26F81F240E51001032B4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		752F26FA1F240E69001032B4 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		752F27001F242BAF001032B4 /* prefs_sdl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = prefs_sdl.cpp; sourceTree = "<group>"; };
@@ -445,6 +447,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				28EFB222236CE16F00988A5B /* QuartzCore.framework in Frameworks */,
 				E413D93620D260DA00E437D8 /* SDL2.framework in Frameworks */,
 				756C1B391F25306A00620917 /* AppKit.framework in Frameworks */,
 				752F26FB1F240E69001032B4 /* IOKit.framework in Frameworks */,
@@ -514,6 +517,7 @@
 		752F26F71F240E51001032B4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				28EFB221236CE16F00988A5B /* QuartzCore.framework */,
 				E413D93520D260DA00E437D8 /* SDL2.framework */,
 				756C1B381F25306A00620917 /* AppKit.framework */,
 				752F26FA1F240E69001032B4 /* IOKit.framework */,

@@ -11,6 +11,7 @@
 #include "main.h"
 #include "macos_util.h"
 #include "prefs.h"
+#include <vector>
 
 /*
  *  Rootless mode support
@@ -139,7 +140,7 @@ void MaskRegion(uint32 regionPtr, bool in) {
                 uint16 end = ReadMacInt16(ptr);
                 ptr += 2;
                 for (int i=begin; i < end; i++) {
-                    curLine[i] ^= 1;
+                    curLine[i] ^= 0xff;
                 }
             }
         }
@@ -151,12 +152,20 @@ void MaskRegion(uint32 regionPtr, bool in) {
             }
         } else {
             for (int x = left; x < right; x++) {
-                scanline[x] |= !curLine[x];
+                scanline[x] |= ~curLine[x];
             }
         }
         
         scanline += display_mask.w;
     }
+}
+
+SDL_Rect GetRegionBounds(uint32 regionPtr) {
+    int16 top = ReadMacInt16(regionPtr + 2);
+    int16 left = ReadMacInt16(regionPtr + 4);
+    int16 bottom = ReadMacInt16(regionPtr + 6);
+    int16 right = ReadMacInt16(regionPtr + 8);
+    return (SDL_Rect){.x = left, .y = top, .w = right-left, .h = bottom-top};
 }
 
 uint32 GetLowMemOffset(uint32 addr) {
@@ -192,12 +201,13 @@ static uint32 GetResource(uint32 type, int16 id, int32* size) {
     return r.a[0];
 }
 
-static void MaskMenuBar() {
+static SDL_Rect MaskMenuBar() {
     uint16 menuBarHeight = ReadMacInt16(0x0BAA);
     MaskRect(0, 0, menuBarHeight, display_mask.w, true);
+    return (SDL_Rect){.x = 0, .y = 0, .w = display_mask.w, .h = menuBarHeight};
 }
 
-static void MaskMenu(uint32 mbEntry) {
+static SDL_Rect MaskMenu(uint32 mbEntry) {
     int16 menuTop = ReadMacInt16(mbEntry);
     int16 menuLeft = ReadMacInt16(mbEntry + 2);
     int16 menuBottom = ReadMacInt16(mbEntry + 4);
@@ -206,12 +216,13 @@ static void MaskMenu(uint32 mbEntry) {
     // shadow
     MaskRect(menuBottom+1, menuLeft+1, menuBottom+2, menuRight+1, true);
     MaskRect(menuTop+2, menuRight+1, menuBottom+2, menuRight+2, true);
+    return (SDL_Rect){.x = menuLeft-1, .y = menuTop, .w = menuRight - menuLeft + 3, .h = menuBottom - menuTop + 2};
 }
 
 uint16 menuEntries[16];
 uint16 *lastMenuEntry = menuEntries;
 
-static void MaskMenus(uint32 expandMem, uint32 lowMemPtr) {
+static void MaskMenus(uint32 expandMem, uint32 lowMemPtr, std::vector<SDL_Rect> &rects) {
     uint32 emHelpGlobals = ReadMacInt32(expandMem + 0x78);
     uint16 inMenuSelect = ReadMacInt16(emHelpGlobals + 0x11c);
     if (!inMenuSelect) {
@@ -241,11 +252,76 @@ static void MaskMenus(uint32 expandMem, uint32 lowMemPtr) {
     
     // mask all menus
     for (uint16 *entry = menuEntries; entry <= lastMenuEntry; entry++) {
-        MaskMenu(mbSaveLoc + *entry);
+        rects.push_back(MaskMenu(mbSaveLoc + *entry));
     }
 }
 
-void update_display_mask(int w, int h) {
+static void MaskBits(int16 x, int16 y, uint16 bits) {
+    uint16 testBit = 0x8000;
+    for(int i=0; i < 16; i++, testBit >>= 1) {
+        if (x < 0 || y < 0 || y >= display_mask.h) continue;
+        display_mask.pixels[x + (y * display_mask.w) + i] |= (bits & testBit) ? 0xff : 0x00;
+    }
+}
+
+bool cursor_point_opaque() {
+    if (display_mask.pixels == NULL) {
+        return true;
+    }
+    int32 my = ReadMacInt16(0x0828);
+    int32 mx = ReadMacInt16(0x082a);
+    return display_mask.pixels[mx + my * display_mask.w];
+}
+
+static SDL_Rect MaskCursor() {
+    int32 y = ReadMacInt16(0x0830);
+    int32 x = ReadMacInt16(0x0832);
+    // cursor data
+    uint16 *TheCrsr = (uint16*)Mac2HostAddr(0x0844);
+    // hotspot
+    uint16 hx = ntohs(TheCrsr[32]);
+    uint16 hy = ntohs(TheCrsr[33]);
+    
+    // apply mask
+    for (int i=0; i < 16; i++) {
+        MaskBits(x-hx, y+i-hy, ntohs(TheCrsr[16+i]));
+    }
+    return (SDL_Rect){.x=x-hx, .y=y-hy, .w=16, .h=16};
+}
+
+bool IsLayer(uint32 windowPtr) {
+    return ReadMacInt16(windowPtr + 0x4A) == 0xDEAD;
+}
+
+void WalkLayerHierarchy(uint32 layerPtr, int level, std::vector<SDL_Rect> &mask_rects) {
+    if (layerPtr == 0) return;
+    int kind = ReadMacInt16(layerPtr + 0x6C);
+    int visible = ReadMacInt8(layerPtr + 0x6E);
+    bool isLayer = IsLayer(layerPtr);
+    uint32 strucRgnHandle = ReadMacInt32(layerPtr + 0x72);
+    int x = 0,y = 0,w = 0,h = 0;
+    if (strucRgnHandle) {
+        uint32 regionPtr = ReadMacInt32(strucRgnHandle);
+        y = ReadMacInt16(regionPtr + 2);
+        x = ReadMacInt16(regionPtr + 4);
+        h = ReadMacInt16(regionPtr + 6) - y;
+        w = ReadMacInt16(regionPtr + 8) - x;
+        if (visible && w && h && !isLayer) {
+            mask_rects.push_back(GetRegionBounds(regionPtr));
+        }
+    }
+    //printf("%*s%s 0x%x, kind=%d, visible=%d, %d,%d %dx%d\n", 2*level, "", IsLayer(layerPtr) ? "Layer" : "Window", layerPtr, kind, visible, x,y,w,h);
+    
+    if (IsLayer(layerPtr)) {
+        uint32 subWindows = ReadMacInt32(layerPtr + 0x94);
+        WalkLayerHierarchy(subWindows, level+1, mask_rects);
+    }
+    
+    uint32 nextWindow = ReadMacInt32(layerPtr + 0x90);
+    if (nextWindow) WalkLayerHierarchy(nextWindow, level, mask_rects);
+}
+
+void update_display_mask(SDL_Window *window, int w, int h) {
     if (rootless_proc_ptr == 0) {
         return;
     }
@@ -261,12 +337,13 @@ void update_display_mask(int w, int h) {
     if (low_mem_map == 0) {
         uint32 handle = GetResource('lmem', -16458, NULL);
         low_mem_map = ReadMacInt32(handle);
+        printf("low_mem_map at 0x%x\n", low_mem_map);
     }
     
     if (display_mask.w != w || display_mask.h != h) {
         // new mask
         free(display_mask.pixels);
-        display_mask.pixels = (uint8_t*)calloc(1, w*h);
+        display_mask.pixels = (uint8_t*)calloc(1, w*h*2);
         display_mask.w = w;
         display_mask.h = h;
     }
@@ -279,20 +356,54 @@ void update_display_mask(int w, int h) {
     uint32 deskPortVisRgn = ReadMacInt32(ReadMacInt32(deskPort + 0x18));
     MaskRegion(deskPortVisRgn, false);
     
-    MaskMenuBar();
+    bool has_front_process = false;
+    std::vector<SDL_Rect> mask_rects;
+    mask_rects.push_back(MaskMenuBar());
     
     M68kRegisters r;
-    // Find frontmost process
+    uint32 rootLayerPtr = 0;
     for(r.d[0] = 0, r.d[1] = 0;;) {
         Execute68k(rootless_proc_ptr, &r);
         uint32_t pEntryPtr = r.d[2];
         if (r.d[2] == 0) break;
         
         uint16 state = ReadMacInt16(pEntryPtr);
-        if (state != 4) break;
+        if (state == 4) {
+            has_front_process = true;
+            uint32 lowMemPtr = ReadMacInt32(ReadMacInt32(pEntryPtr + 0x9E));
+            if (lowMemPtr) {
+                MaskMenus(expandMem, lowMemPtr, mask_rects);
+            }
+        }
         
-        uint32 lowMemPtr = ReadMacInt32(ReadMacInt32(pEntryPtr + 0x9E));
-        MaskMenus(expandMem, lowMemPtr);
+        uint32 layerPtr = ReadMacInt32(pEntryPtr + 0x70);
+        uint16 layerTxSize = ReadMacInt16(layerPtr + 0x4A);
+        if (layerTxSize != 0xDEAD) {
+            // not a layer
+            continue;
+        }
+        
+        // find root layer
+        if (rootLayerPtr == 0) {
+            rootLayerPtr = ReadMacInt32(layerPtr + 0x82); // parent layer
+            while (ReadMacInt32(rootLayerPtr + 0x82)) {
+                rootLayerPtr = ReadMacInt32(rootLayerPtr + 0x82);
+            }
+            WalkLayerHierarchy(rootLayerPtr, 0, mask_rects);
+        }
+    }
+    
+    // Cursor
+    if (cursor_point_opaque()) {
+        SDL_ShowCursor(SDL_DISABLE);
+        mask_rects.push_back(MaskCursor());
+    } else {
+        SDL_ShowCursor(SDL_ENABLE);
+    }
+    
+    extern void update_window_mask_rects(SDL_Window * window, int h, const std::vector<SDL_Rect> &rects);
+    if (has_front_process) {
+        update_window_mask_rects(window, display_mask.h, mask_rects);
     }
 }
 
@@ -301,7 +412,7 @@ void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {
         return;
     }
     
-    printf("apply video mask (%d,%d->%dx%d)\n", (int)update_rect.x, (int)update_rect.y, (int)update_rect.w, (int)update_rect.h);
+    //printf("apply video mask (%d,%d->%dx%d)\n", (int)update_rect.x, (int)update_rect.y, (int)update_rect.w, (int)update_rect.h);
     
     if (host_surface->format->format != SDL_PIXELFORMAT_ARGB8888) {
         printf("Invalid host surface\n");
