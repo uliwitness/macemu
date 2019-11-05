@@ -88,7 +88,8 @@ extern int display_type;							// See enum above
 #else
 enum {
 	DISPLAY_WINDOW,									// windowed display
-	DISPLAY_SCREEN									// fullscreen display
+	DISPLAY_SCREEN, 								// fullscreen display
+    DISPLAY_ROOTLESS                                // fullscreen with transparent desktop
 };
 static int display_type = DISPLAY_WINDOW;			// See enum above
 #endif
@@ -743,6 +744,11 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 	window_flags |= SDL_WINDOW_RESIZABLE;
 */
 	if (!sdl_window) {
+#ifdef VIDEO_ROOTLESS
+        if (display_type == DISPLAY_ROOTLESS) {
+            window_flags |= SDL_WINDOW_BORDERLESS;
+        }
+#endif
 		sdl_window = SDL_CreateWindow(
 			"Basilisk II",
 			SDL_WINDOWPOS_UNDEFINED,
@@ -1380,6 +1386,13 @@ bool VideoInit(bool classic)
 			display_type = DISPLAY_WINDOW;
 		else if (sscanf(mode_str, "dga/%d/%d", &default_width, &default_height) == 2)
 			display_type = DISPLAY_SCREEN;
+#ifdef VIDEO_ROOTLESS
+        else if (strncmp(mode_str, "rootless", 8) == 0) {
+            display_type = DISPLAY_ROOTLESS;
+            default_width = sdl_display_width();
+            default_height = sdl_display_height();
+        }
+#endif
 	}
 	if (default_width <= 0)
 		default_width = sdl_display_width();
@@ -1469,7 +1482,12 @@ bool VideoInit(bool classic)
 			for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
 				add_mode(display_type, w, h, video_modes[i].resolution_id, TrivialBytesPerRow(w, (video_depth)d), d);
 		}
-	}
+#ifdef VIDEO_ROOTLESS
+    } else if (display_type == DISPLAY_ROOTLESS) {
+        for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
+            add_mode(display_type, default_width, default_height, 0x80, TrivialBytesPerRow(default_width, (video_depth)d), d);
+#endif
+    }
 
 	if (VideoModes.empty()) {
 		ErrorAlert(STR_NO_XVISUAL_ERR);

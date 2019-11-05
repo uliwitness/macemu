@@ -61,7 +61,7 @@ static uint32 low_mem_map = 0;
 int16 InstallRootlessProc() {
     // Rootless mode support
     M68kRegisters r;
-    if (PrefsFindBool("rootless")) {
+    if (strncmp(PrefsFindString("screen"), "rootless", 8) == 0) {
         printf("Installing rootless support\n");
         r.d[0] = sizeof(rootless_proc);
         Execute68kTrap(0xa71e, &r); // NewPtrSysClear()
