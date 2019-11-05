@@ -430,9 +430,7 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     }
     
     extern void update_window_mask_rects(SDL_Window * window, int h, const std::vector<SDL_Rect> &rects);
-    if (has_front_process) {
-        update_window_mask_rects(window, display_mask.h, mask_rects);
-    }
+    update_window_mask_rects(window, display_mask.h, mask_rects);
 }
 
 void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {
