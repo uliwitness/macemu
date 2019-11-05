@@ -94,6 +94,8 @@ void MaskRect(int16 top, int16 left, int16 bottom, int16 right, bool in) {
     if (top == bottom || left == right) return;
     if (top < 0) top = 0;
     if (left < 0) left = 0;
+    if (bottom > display_mask.h) bottom = display_mask.h;
+    if (right > display_mask.w) right = display_mask.w;
     
     uint8_t *line = display_mask.pixels + display_mask.w * top + left;
     for (int y = top; y < bottom; y++) {
@@ -122,7 +124,9 @@ void MaskRegion(uint32 regionPtr, bool in) {
     int16 left = ReadMacInt16(regionPtr + 4);
     int16 bottom = ReadMacInt16(regionPtr + 6);
     int16 right = ReadMacInt16(regionPtr + 8);
-    
+    if (bottom > display_mask.h) bottom = display_mask.h;
+    if (right > display_mask.w) right = display_mask.w;
+
     if (size == 10) {
         MaskRect(top, left, bottom, right, in);
         return;
@@ -144,6 +148,9 @@ void MaskRegion(uint32 regionPtr, bool in) {
                 if (begin == 0x7fff) break;
                 uint16 end = ReadMacInt16(ptr);
                 ptr += 2;
+                if (end > display_mask.w) {
+                    end = display_mask.w;
+                }
                 for (int i=begin; i < end; i++) {
                     curLine[i] ^= 0xff;
                 }
