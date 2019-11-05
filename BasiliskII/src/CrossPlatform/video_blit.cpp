@@ -245,7 +245,8 @@ static void Blit_Copy_Raw(uint8 * dest, const uint8 * source, uint32 length)
 	(dst =	(((src) >> 24) & UVAL64(0x000000ff000000ff)) | \
 			(((src) >>  8) & UVAL64(0x0000ff000000ff00)) | \
 			(((src) & UVAL64(0x0000ff000000ff00)) <<  8) | \
-			(((src) & UVAL64(0x000000ff000000ff)) << 24))
+			(((src) & UVAL64(0x000000ff000000ff)) << 24) | \
+            (UVAL64(0xff000000ff000000)))
 
 #define FB_DEPTH 24
 #include "video_blit.h"
