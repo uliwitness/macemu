@@ -13,6 +13,9 @@
 #include "prefs.h"
 #include <vector>
 
+extern void make_window_transparent(SDL_Window * window);
+extern void update_sdl_video(SDL_Surface *s, int numrects, SDL_Rect *rects);
+
 /*
  *  Rootless mode support
  */
@@ -340,13 +343,23 @@ void update_display_mask(SDL_Window *window, int w, int h) {
         printf("low_mem_map at 0x%x\n", low_mem_map);
     }
     
+    std::vector<SDL_Rect> mask_rects;
+    
     if (display_mask.w != w || display_mask.h != h) {
         // new mask
         free(display_mask.pixels);
-        display_mask.pixels = (uint8_t*)calloc(1, w*h*2);
-        display_mask.cursorMask = &display_mask.pixels[display_mask.w * display_mask.h];
+        display_mask.pixels = (uint8_t*)calloc(2, w*h);
         display_mask.w = w;
         display_mask.h = h;
+        display_mask.cursorMask = &display_mask.pixels[display_mask.w * display_mask.h];
+        
+        // update whole screen
+        make_window_transparent(window);
+        SDL_Rect rect = {.x = 0, .y = 0, .w = w, .h = h};
+        update_sdl_video(NULL, 1, &rect);
+        mask_rects.push_back(rect);
+        memset(display_mask.pixels, 0xff, 2 * display_mask.w * display_mask.h);
+        return;
     }
     
     // clear all
@@ -358,7 +371,6 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     MaskRegion(deskPortVisRgn, false);
     
     bool has_front_process = false;
-    std::vector<SDL_Rect> mask_rects;
     
     M68kRegisters r;
     uint32 rootLayerPtr = 0;
@@ -417,8 +429,6 @@ void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {
     if (display_mask.pixels == NULL) {
         return;
     }
-    
-    //printf("apply video mask (%d,%d->%dx%d)\n", (int)update_rect.x, (int)update_rect.y, (int)update_rect.w, (int)update_rect.h);
     
     if (host_surface->format->format != SDL_PIXELFORMAT_ARGB8888) {
         printf("Invalid host surface\n");

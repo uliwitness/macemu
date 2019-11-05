@@ -66,7 +66,6 @@
 #include "vm_alloc.h"
 
 #ifdef VIDEO_ROOTLESS
-extern void make_window_transparent(SDL_Window * window);
 extern void update_display_mask(SDL_Window * window, int w, int h);
 extern void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect);
 extern bool cursor_point_opaque(void);
@@ -757,12 +756,6 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 		}
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
-	
-#ifdef VIDEO_ROOTLESS
-    if (PrefsFindBool("rootless")) {
-        make_window_transparent(sdl_window);
-    }
-#endif
     
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which

@@ -71,9 +71,11 @@ void make_window_transparent(SDL_Window * window)
     NSWindow *cocoaWindow = wmInfo.info.cocoa.window;
     NSView *sdlView = cocoaWindow.contentView;
     sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
-    CALayer *maskLayer = [CAShapeLayer layer];
-    sdlView.layer.mask = [maskLayer retain];
-    SDL_SetWindowData(window, "maskLayer", maskLayer);
+    if (SDL_GetWindowData(window, "maskLayer") == NULL) {
+        CALayer *maskLayer = [CAShapeLayer layer];
+        sdlView.layer.mask = maskLayer;
+        SDL_SetWindowData(window, "maskLayer", maskLayer);
+    }
     cocoaWindow.backgroundColor = [NSColor clearColor];
     cocoaWindow.hasShadow = NO;
     cocoaWindow.opaque = NO;
