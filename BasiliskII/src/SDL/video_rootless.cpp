@@ -246,19 +246,22 @@ static void MaskMenus(uint32 expandMem, uint32 lowMemPtr, std::vector<SDL_Rect> 
         return;
     }
     
-    inMenuSelect = true;
-    
     uint16 mbEntryOffset = ReadMacInt16(mbSaveLoc);
-    if (lastMenuEntry == menuEntries && *lastMenuEntry == 0) {
+    if (mbEntryOffset == 0) {
+        inMenuSelect = false;
+        return;
+    } else if (lastMenuEntry == menuEntries && *lastMenuEntry == 0) {
         // first menu
         *lastMenuEntry = mbEntryOffset;
-    } else if (mbEntryOffset > *lastMenuEntry) {
+    } else if (mbEntryOffset > *lastMenuEntry && lastMenuEntry < &menuEntries[16]) {
         // added menu
         *(++lastMenuEntry) = mbEntryOffset;
     } else if (mbEntryOffset < *lastMenuEntry) {
         // removed menu
         lastMenuEntry--;
     }
+    
+    inMenuSelect = true;
     
     // mask all menus
     for (uint16 *entry = menuEntries; entry <= lastMenuEntry; entry++) {
