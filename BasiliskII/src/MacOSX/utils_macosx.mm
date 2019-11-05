@@ -75,10 +75,26 @@ void make_window_transparent(SDL_Window * window)
         CALayer *maskLayer = [CAShapeLayer layer];
         sdlView.layer.mask = maskLayer;
         SDL_SetWindowData(window, "maskLayer", maskLayer);
+        
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc addObserverForName:NSWindowDidBecomeKeyNotification object:cocoaWindow queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
+            NSWindow *window = (NSWindow*)note.object;
+            window.level = NSMainMenuWindowLevel+1;
+        }];
+        [nc addObserverForName:NSWindowDidResignKeyNotification object:cocoaWindow queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
+            NSWindow *window = (NSWindow*)note.object;
+            // hack for window to be sent behind new key window
+            [window setIsVisible:NO];
+            [window setLevel:NSNormalWindowLevel];
+            [window setIsVisible:YES];
+        }];
     }
     cocoaWindow.backgroundColor = [NSColor clearColor];
     cocoaWindow.hasShadow = NO;
     cocoaWindow.opaque = NO;
+    if (cocoaWindow.isKeyWindow) {
+        cocoaWindow.level = NSMainMenuWindowLevel+1;
+    }
     
     // make metal layer transparent
     for (NSView *view in sdlView.subviews) {
