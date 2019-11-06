@@ -15,6 +15,7 @@
 
 extern void make_window_transparent(SDL_Window * window);
 extern void update_sdl_video(SDL_Surface *s, int numrects, SDL_Rect *rects);
+int native_menubar_size = 0;
 
 /*
  *  Rootless mode support
@@ -231,6 +232,10 @@ uint16 menuBarHeight;
 bool inMenuSelect = false;
 
 static SDL_Rect MaskMenuBar() {
+    if (native_menubar_size && ReadMacInt16(0x0BAA) == 20) {
+        // Embiggen menubar
+        WriteMacInt16(0xBAA, native_menubar_size);
+    }
     if (!inMenuSelect) {
         menuBarHeight = ReadMacInt16(0x0BAA);
     }

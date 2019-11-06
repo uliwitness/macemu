@@ -61,6 +61,9 @@ void make_window_transparent(SDL_Window * window)
         return;
     }
     
+    extern int native_menubar_size;
+    native_menubar_size = (int)[[NSApp mainMenu] menuBarHeight];
+    
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
     if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
