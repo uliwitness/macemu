@@ -11,6 +11,7 @@
 #include "main.h"
 #include "macos_util.h"
 #include "prefs.h"
+#include "emul_op.h"
 #include <vector>
 
 extern void make_window_transparent(SDL_Window * window);
@@ -54,10 +55,34 @@ static const uint8 rootless_proc[] = {
     0x20, 0x1F,             // move.l (sp)+,d0     ; size
     0x20, 0x5F,             // movea.l (sp)+,a0    ; handle
     0x4E, 0x75,             // rts
+
+#define PAINTRGNPATCH (GETRESOURCE + 22)
+    M68K_EMUL_OP_PAINTRGN >> 8,
+    M68K_EMUL_OP_PAINTRGN & 0xff,
+    0x2F, 0x3C, 0, 0, 0, 0, // move.l address, -(sp)
+    0x4E, 0x75,             // rts
+
+#define DRAGGRAYRGNPATCH (PAINTRGNPATCH + 10)
+    M68K_EMUL_OP_DRAGGRAYRGN >> 8,
+    M68K_EMUL_OP_DRAGGRAYRGN & 0xff,
+    0x2F, 0x3C, 0, 0, 0, 0, // move.l address, -(sp)
+    0x4E, 0x75,             // rts
 };
 
 static uint32 rootless_proc_ptr = 0;
 static uint32 low_mem_map = 0;
+static bool dragging_region = false;
+static uint32 drag_region_ptr = 0;
+
+static void MyPatchTrap(int trap, uint32 ptr) {
+    M68kRegisters r;
+    r.d[0] = trap;
+    Execute68kTrap(0xa746, &r);    // GetToolTrapAddress()
+    WriteMacInt32(ptr + 4, r.a[0]);
+    r.d[0] = trap;
+    r.a[0] = ptr;
+    Execute68kTrap(0xa647, &r);    // SetToolTrap()
+}
 
 int16 InstallRootlessProc() {
     // Rootless mode support
@@ -73,6 +98,10 @@ int16 InstallRootlessProc() {
         Host2Mac_memcpy(rootless_proc_ptr, rootless_proc, sizeof(rootless_proc));
         low_mem_map = 0;
         printf("Installed at 0x%x\n", rootless_proc_ptr);
+        
+        // Install patches to detect dragging regions
+        MyPatchTrap(0xa8d3, rootless_proc_ptr + PAINTRGNPATCH);
+        MyPatchTrap(0xa905, rootless_proc_ptr + DRAGGRAYRGNPATCH);
     } else {
         rootless_proc_ptr = 0;
         low_mem_map = 0;
@@ -423,6 +452,16 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     // Menu Bar
     mask_rects.push_back(MaskMenuBar());
     
+    // Drag region
+    int8 mouseState = ReadMacInt8(0x0172);
+    if (dragging_region && mouseState) {
+        dragging_region = false;
+        drag_region_ptr = 0;
+    } else if (dragging_region && !mouseState && drag_region_ptr) {
+        MaskRegion(drag_region_ptr, true);
+        mask_rects.push_back(GetRegionBounds(drag_region_ptr));
+    }
+    
     // Copy over cursor mask
     memcpy(display_mask.cursorMask, display_mask.pixels, display_mask.w * display_mask.h);
     
@@ -465,5 +504,15 @@ void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {
         }
         srcPixels += host_surface->pitch / 4;
         srcMask += display_mask.w;
+    }
+}
+
+void check_drag_region(M68kRegisters *r, uint16 opcode) {
+    if (opcode == M68K_EMUL_OP_DRAGGRAYRGN) {
+        dragging_region = true;
+        drag_region_ptr = 0;
+    } else if (opcode == M68K_EMUL_OP_PAINTRGN && dragging_region) {
+        uint32 regionHandle = ReadMacInt32(r->a[7]+4);
+        drag_region_ptr = ReadMacInt32(regionHandle);
     }
 }
