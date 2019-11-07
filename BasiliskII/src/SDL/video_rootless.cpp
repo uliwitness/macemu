@@ -252,7 +252,7 @@ static SDL_Rect MaskMenu(uint32 mbEntry) {
     // shadow
     MaskRect(menuBottom+1, menuLeft+1, menuBottom+2, menuRight+1, true);
     MaskRect(menuTop+2, menuRight+1, menuBottom+2, menuRight+2, true);
-    return (SDL_Rect){.x = menuLeft-1, .y = menuTop-1, .w = menuRight - menuLeft + 3, .h = menuBottom - menuTop + 2};
+    return (SDL_Rect){.x = menuLeft-1, .y = menuTop-1, .w = menuRight - menuLeft + 3, .h = menuBottom - menuTop + 3};
 }
 
 uint16 menuEntries[16];
