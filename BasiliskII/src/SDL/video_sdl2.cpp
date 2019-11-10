@@ -1484,8 +1484,14 @@ bool VideoInit(bool classic)
 		}
 #ifdef VIDEO_ROOTLESS
     } else if (display_type == DISPLAY_ROOTLESS) {
-        for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
-            add_mode(display_type, default_width, default_height, 0x80, TrivialBytesPerRow(default_width, (video_depth)d), d);
+        for (int i = 0; video_modes[i].w != 0; i++) {
+            const int w = video_modes[i].w;
+            const int h = video_modes[i].h;
+            if (i > 0 && (w >= default_width || h >= default_height))
+                continue;
+            for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
+                add_mode(display_type, w, h, video_modes[i].resolution_id, TrivialBytesPerRow(w, (video_depth)d), d);
+        }
 #endif
     }
 
