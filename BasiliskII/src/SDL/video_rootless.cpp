@@ -403,16 +403,15 @@ void update_display_mask(SDL_Window *window, int w, int h) {
         update_sdl_video(NULL, 1, &rect);
         mask_rects.push_back(rect);
         memset(display_mask.pixels, 0xff, 2 * display_mask.w * display_mask.h);
-        return;
+    } else {
+        // clear all
+        memset(display_mask.pixels, 0, display_mask.w * display_mask.h);
+
+        // show non-desktop
+        uint32 deskPort = ReadMacInt32(0x9E2);
+        uint32 deskPortVisRgn = ReadMacInt32(ReadMacInt32(deskPort + 0x18));
+        MaskRegion(deskPortVisRgn, false);
     }
-    
-    // clear all
-    memset(display_mask.pixels, 0, display_mask.w * display_mask.h);
-    
-    // show non-desktop
-    uint32 deskPort = ReadMacInt32(0x9E2);
-    uint32 deskPortVisRgn = ReadMacInt32(ReadMacInt32(deskPort + 0x18));
-    MaskRegion(deskPortVisRgn, false);
     
     bool has_front_process = false;
     
