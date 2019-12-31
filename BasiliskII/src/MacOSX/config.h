@@ -816,5 +816,6 @@
 /* #undef uintmax_t */
 
 #define FPU_IEEE
+#define VIDEO_ROOTLESS
 
 #endif

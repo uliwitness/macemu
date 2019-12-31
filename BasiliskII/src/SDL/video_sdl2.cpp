@@ -65,6 +65,12 @@
 #include "video_blit.h"
 #include "vm_alloc.h"
 
+#ifdef VIDEO_ROOTLESS
+extern void update_display_mask(SDL_Window * window, int w, int h);
+extern void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect);
+extern bool cursor_point_opaque(void);
+#endif
+
 #define DEBUG 0
 #include "debug.h"
 
@@ -82,7 +88,8 @@ extern int display_type;							// See enum above
 #else
 enum {
 	DISPLAY_WINDOW,									// windowed display
-	DISPLAY_SCREEN									// fullscreen display
+	DISPLAY_SCREEN, 								// fullscreen display
+    DISPLAY_ROOTLESS                                // fullscreen with transparent desktop
 };
 static int display_type = DISPLAY_WINDOW;			// See enum above
 #endif
@@ -737,6 +744,11 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 	window_flags |= SDL_WINDOW_RESIZABLE;
 */
 	if (!sdl_window) {
+#ifdef VIDEO_ROOTLESS
+        if (display_type == DISPLAY_ROOTLESS) {
+            window_flags |= SDL_WINDOW_BORDERLESS;
+        }
+#endif
 		sdl_window = SDL_CreateWindow(
 			"Basilisk II",
 			SDL_WINDOWPOS_UNDEFINED,
@@ -750,7 +762,7 @@ static SDL_Surface * init_sdl_video(int width, int height, int bpp, Uint32 flags
 		}
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
-	
+    
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which
 	// allows events to be processed as they are generated.
@@ -894,6 +906,11 @@ static int present_sdl_video()
 	}
 	UNLOCK_PALETTE; // passed potential deadlock, can unlock palette
 	
+#ifdef VIDEO_ROOTLESS
+    // Apply mask
+    apply_display_mask(host_surface, sdl_update_video_rect);
+#endif
+
     // Update the host OS' texture
     void * srcPixels = (void *)((uint8_t *)host_surface->pixels +
         sdl_update_video_rect.y * host_surface->pitch +
@@ -1369,6 +1386,13 @@ bool VideoInit(bool classic)
 			display_type = DISPLAY_WINDOW;
 		else if (sscanf(mode_str, "dga/%d/%d", &default_width, &default_height) == 2)
 			display_type = DISPLAY_SCREEN;
+#ifdef VIDEO_ROOTLESS
+        else if (strncmp(mode_str, "rootless", 8) == 0) {
+            display_type = DISPLAY_ROOTLESS;
+            default_width = sdl_display_width();
+            default_height = sdl_display_height();
+        }
+#endif
 	}
 	if (default_width <= 0)
 		default_width = sdl_display_width();
@@ -1458,7 +1482,18 @@ bool VideoInit(bool classic)
 			for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
 				add_mode(display_type, w, h, video_modes[i].resolution_id, TrivialBytesPerRow(w, (video_depth)d), d);
 		}
-	}
+#ifdef VIDEO_ROOTLESS
+    } else if (display_type == DISPLAY_ROOTLESS) {
+        for (int i = 0; video_modes[i].w != 0; i++) {
+            const int w = video_modes[i].w;
+            const int h = video_modes[i].h;
+            if (i > 0 && (w >= default_width || h >= default_height))
+                continue;
+            for (int d = VIDEO_DEPTH_1BIT; d <= default_depth; d++)
+                add_mode(display_type, w, h, video_modes[i].resolution_id, TrivialBytesPerRow(w, (video_depth)d), d);
+        }
+#endif
+    }
 
 	if (VideoModes.empty()) {
 		ErrorAlert(STR_NO_XVISUAL_ERR);
@@ -1697,6 +1732,9 @@ void VideoInterrupt(void)
 	if (toggle_fullscreen)
 		do_toggle_fullscreen();
 
+#ifdef VIDEO_ROOTLESS
+    update_display_mask(sdl_window, host_surface->w, host_surface->h);
+#endif
 	present_sdl_video();
 
 	// Temporarily give up frame buffer lock (this is the point where
@@ -1931,132 +1969,31 @@ static bool is_hotkey_down(SDL_Keysym const & ks)
 
 static int kc_decode(SDL_Keysym const & ks, bool key_down)
 {
+	static int8_t usb_to_adb_scancode[] = {
+		-1, -1, -1, -1, 0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37,
+		46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6, 18, 19,
+		20, 21, 23, 22, 26, 28, 25, 29, 36, 53, 51, 48, 49, 27, 24, 33,
+		30, 42, 42, 41, 39, 10, 43, 47, 44, 57, 122, 120, 99, 118, 96, 97,
+		98, 100, 101, 109, 103, 111, 105, 107, 113, 114, 115, 116, 117, 119, 121, 60,
+		59, 61, 62, 71, 75, 67, 78, 69, 76, 83, 84, 85, 86, 87, 88, 89,
+		91, 92, 82, 65, 50, 55, 126, 81, 105, 107, 113, 106, 64, 79, 80, 90,
+		-1, -1, -1, -1, -1, 114, -1, -1, -1, -1, -1, -1, -1, -1, -1, 74,
+		72, 73, -1, -1, -1, 95, -1, 94, -1, 93, -1, -1, -1, -1, -1, -1,
+		104, 102, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		54, 56, 58, 55, 54, 56, 58, 55, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+	};
 	switch (ks.sym) {
-	case SDLK_a: return 0x00;
-	case SDLK_b: return 0x0b;
-	case SDLK_c: return 0x08;
-	case SDLK_d: return 0x02;
-	case SDLK_e: return 0x0e;
-	case SDLK_f: return 0x03;
-	case SDLK_g: return 0x05;
-	case SDLK_h: return 0x04;
-	case SDLK_i: return 0x22;
-	case SDLK_j: return 0x26;
-	case SDLK_k: return 0x28;
-	case SDLK_l: return 0x25;
-	case SDLK_m: return 0x2e;
-	case SDLK_n: return 0x2d;
-	case SDLK_o: return 0x1f;
-	case SDLK_p: return 0x23;
-	case SDLK_q: return 0x0c;
-	case SDLK_r: return 0x0f;
-	case SDLK_s: return 0x01;
-	case SDLK_t: return 0x11;
-	case SDLK_u: return 0x20;
-	case SDLK_v: return 0x09;
-	case SDLK_w: return 0x0d;
-	case SDLK_x: return 0x07;
-	case SDLK_y: return 0x10;
-	case SDLK_z: return 0x06;
-
-	case SDLK_1: case SDLK_EXCLAIM: return 0x12;
-	case SDLK_2: case SDLK_AT: return 0x13;
-	case SDLK_3: case SDLK_HASH: return 0x14;
-	case SDLK_4: case SDLK_DOLLAR: return 0x15;
-	case SDLK_5: return 0x17;
-	case SDLK_6: return 0x16;
-	case SDLK_7: return 0x1a;
-	case SDLK_8: return 0x1c;
-	case SDLK_9: return 0x19;
-	case SDLK_0: return 0x1d;
-
-	case SDLK_BACKQUOTE: case 167: return 0x32;
-	case SDLK_MINUS: case SDLK_UNDERSCORE: return 0x1b;
-	case SDLK_EQUALS: case SDLK_PLUS: return 0x18;
-	case SDLK_LEFTBRACKET: return 0x21;
-	case SDLK_RIGHTBRACKET: return 0x1e;
-	case SDLK_BACKSLASH: return 0x2a;
-	case SDLK_SEMICOLON: case SDLK_COLON: return 0x29;
-	case SDLK_QUOTE: case SDLK_QUOTEDBL: return 0x27;
-	case SDLK_COMMA: case SDLK_LESS: return 0x2b;
-	case SDLK_PERIOD: case SDLK_GREATER: return 0x2f;
-	case SDLK_SLASH: case SDLK_QUESTION: return 0x2c;
-
 	case SDLK_TAB: if (is_hotkey_down(ks)) {if (!key_down) drv->suspend(); return -2;} else return 0x30;
 	case SDLK_RETURN: if (is_hotkey_down(ks)) {if (!key_down) toggle_fullscreen = true; return -2;} else return 0x24;
-	case SDLK_SPACE: return 0x31;
-	case SDLK_BACKSPACE: return 0x33;
-
-	case SDLK_DELETE: return 0x75;
-	case SDLK_INSERT: return 0x72;
-	case SDLK_HOME: case SDLK_HELP: return 0x73;
-	case SDLK_END: return 0x77;
-	case SDLK_PAGEUP: return 0x74;
-	case SDLK_PAGEDOWN: return 0x79;
-
-	case SDLK_LCTRL: return 0x36;
-	case SDLK_RCTRL: return 0x36;
-	case SDLK_LSHIFT: return 0x38;
-	case SDLK_RSHIFT: return 0x38;
-#ifdef __APPLE__
-	case SDLK_LALT: return 0x3a;
-	case SDLK_RALT: return 0x3a;
-	case SDLK_LGUI: return 0x37;
-	case SDLK_RGUI: return 0x37;
-#else
-	case SDLK_LALT: return 0x37;
-	case SDLK_RALT: return 0x37;
-	case SDLK_LGUI: return 0x3a;
-	case SDLK_RGUI: return 0x3a;
-#endif
-	case SDLK_MENU: return 0x32;
-	case SDLK_CAPSLOCK: return 0x39;
-	case SDLK_NUMLOCKCLEAR: return 0x47;
-
-	case SDLK_UP: return 0x3e;
-	case SDLK_DOWN: return 0x3d;
-	case SDLK_LEFT: return 0x3b;
-	case SDLK_RIGHT: return 0x3c;
-
 	case SDLK_ESCAPE: if (is_hotkey_down(ks)) {if (!key_down) { quit_full_screen = true; emerg_quit = true; } return -2;} else return 0x35;
-
 	case SDLK_F1: if (is_hotkey_down(ks)) {if (!key_down) SysMountFirstFloppy(); return -2;} else return 0x7a;
-	case SDLK_F2: return 0x78;
-	case SDLK_F3: return 0x63;
-	case SDLK_F4: return 0x76;
-	case SDLK_F5: return 0x60;
-	case SDLK_F6: return 0x61;
-	case SDLK_F7: return 0x62;
-	case SDLK_F8: return 0x64;
-	case SDLK_F9: return 0x65;
-	case SDLK_F10: return 0x6d;
-	case SDLK_F11: return 0x67;
-	case SDLK_F12: return 0x6f;
-
-	case SDLK_PRINTSCREEN: return 0x69;
-	case SDLK_SCROLLLOCK: return 0x6b;
-	case SDLK_PAUSE: return 0x71;
-
-	case SDLK_KP_0: return 0x52;
-	case SDLK_KP_1: return 0x53;
-	case SDLK_KP_2: return 0x54;
-	case SDLK_KP_3: return 0x55;
-	case SDLK_KP_4: return 0x56;
-	case SDLK_KP_5: return 0x57;
-	case SDLK_KP_6: return 0x58;
-	case SDLK_KP_7: return 0x59;
-	case SDLK_KP_8: return 0x5b;
-	case SDLK_KP_9: return 0x5c;
-	case SDLK_KP_PERIOD: return 0x41;
-	case SDLK_KP_PLUS: return 0x45;
-	case SDLK_KP_MINUS: return 0x4e;
-	case SDLK_KP_MULTIPLY: return 0x43;
-	case SDLK_KP_DIVIDE: return 0x4b;
-	case SDLK_KP_ENTER: return 0x4c;
-	case SDLK_KP_EQUALS: return 0x51;
+	default: return usb_to_adb_scancode[ks.scancode];
 	}
-	D(bug("Unhandled SDL keysym: %d\n", ks.sym));
-	return -1;
 }
 
 static int event2keycode(SDL_KeyboardEvent const &ev, bool key_down)
@@ -2162,6 +2099,11 @@ static void handle_events(void)
 
 			// Mouse button
 			case SDL_MOUSEBUTTONDOWN: {
+#ifdef VIDEO_ROOTLESS
+                if (!cursor_point_opaque()) {
+                    break;
+                }
+#endif
 				unsigned int button = event.button.button;
 				if (button == SDL_BUTTON_LEFT)
 					ADBMouseDown(0);
