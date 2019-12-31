@@ -1,6 +1,6 @@
 #### BasiliskII
 ```
-macOS 64-bit JIT
+macOS 64-bit ---
 Linux 32-bit JIT
 MinGW 32-bit JIT
 ```
@@ -16,6 +16,7 @@ These builds need to be installed SDL2.0.10+ framework/library.
 ##### macOS
 1. Open BasiliskII/src/MacOSX/BasiliskII.xcodeproj
 1. Set Build Configuration to Release
+1. If building with Xcode10+, set File -> Project Settings -> Build System to Legacy Build System.
 1. Build
 
 ##### Linux(x86)
