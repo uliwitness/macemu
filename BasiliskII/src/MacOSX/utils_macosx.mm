@@ -74,6 +74,7 @@ void make_window_transparent(SDL_Window * window)
     CGColorRef clearColor = [NSColor clearColor].CGColor;
     NSWindow *cocoaWindow = wmInfo.info.cocoa.window;
     NSView *sdlView = cocoaWindow.contentView;
+	sdlView.wantsLayer = YES;
     sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
     if (SDL_GetWindowData(window, "observing") == NULL) {
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
