@@ -55,6 +55,7 @@ void disable_SDL2_macosx_menu_bar_keyboard_shortcuts() {
 	}
 }
 
+#ifdef VIDEO_ROOTLESS
 void make_window_transparent(SDL_Window * window)
 {
     if (!window) {
@@ -73,6 +74,7 @@ void make_window_transparent(SDL_Window * window)
     CGColorRef clearColor = [NSColor clearColor].CGColor;
     NSWindow *cocoaWindow = wmInfo.info.cocoa.window;
     NSView *sdlView = cocoaWindow.contentView;
+	sdlView.wantsLayer = YES;
     sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
     if (SDL_GetWindowData(window, "observing") == NULL) {
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
@@ -127,6 +129,7 @@ void update_window_mask_rects(SDL_Window * window, int h, const std::vector<SDL_
     maskLayer.affineTransform = CGAffineTransformScale(CGAffineTransformMakeTranslation(0, h), 1.0, -1.0);
     CGPathRelease(path);
 }
+#endif
 
 bool is_fullscreen_osx(SDL_Window * window)
 {
