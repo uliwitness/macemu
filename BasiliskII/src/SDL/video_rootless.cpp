@@ -73,6 +73,7 @@ static uint32 rootless_proc_ptr = 0;
 static uint32 low_mem_map = 0;
 static bool dragging_region = false;
 static uint32 drag_region_ptr = 0;
+static size_t mask_n = 0;
 
 static void MyPatchTrap(int trap, uint32 ptr) {
     M68kRegisters r;
@@ -368,16 +369,16 @@ void WalkLayerHierarchy(uint32 layerPtr, int level, std::vector<SDL_Rect> &mask_
     if (nextWindow) WalkLayerHierarchy(nextWindow, level, mask_rects);
 }
 
-void update_display_mask(SDL_Window *window, int w, int h) {
+bool update_display_mask(SDL_Window *window, int w, int h) {
     if (rootless_proc_ptr == 0) {
-        return;
+        return false;
     }
     
     // Check for process manager
     uint32 expandMem = ReadMacInt32(0x02B6);
     uint16 emProcessMgrExists = ReadMacInt16(expandMem + 0x0128);
     if (!emProcessMgrExists) {
-        return;
+        return false;
     }
     
     // Read lowmem mapping
@@ -474,6 +475,10 @@ void update_display_mask(SDL_Window *window, int w, int h) {
     
     extern void update_window_mask_rects(SDL_Window * window, int h, const std::vector<SDL_Rect> &rects);
     update_window_mask_rects(window, display_mask.h, mask_rects);
+	
+	bool f = mask_rects.size() > mask_n;
+	mask_n = mask_rects.size();
+	return f;
 }
 
 void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect) {

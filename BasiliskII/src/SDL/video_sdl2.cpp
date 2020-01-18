@@ -66,9 +66,11 @@
 #include "vm_alloc.h"
 
 #ifdef VIDEO_ROOTLESS
-extern void update_display_mask(SDL_Window * window, int w, int h);
+extern bool update_display_mask(SDL_Window * window, int w, int h);
 extern void apply_display_mask(SDL_Surface * host_surface, SDL_Rect update_rect);
 extern bool cursor_point_opaque(void);
+static bool force_redraw = false;
+static spinlock_t force_redraw_lock = SPIN_LOCK_UNLOCKED;
 #endif
 
 #define DEBUG 0
@@ -1733,7 +1735,9 @@ void VideoInterrupt(void)
 		do_toggle_fullscreen();
 
 #ifdef VIDEO_ROOTLESS
-    update_display_mask(sdl_window, host_surface->w, host_surface->h);
+	spin_lock(&force_redraw_lock);
+    force_redraw |= update_display_mask(sdl_window, host_surface->w, host_surface->h);
+	spin_unlock(&force_redraw_lock);
 #endif
 	present_sdl_video();
 
@@ -2391,6 +2395,13 @@ static void update_display_static(driver_base *drv)
 // XXX use NQD bounding boxes to help detect dirty areas?
 static void update_display_static_bbox(driver_base *drv)
 {
+#ifdef VIDEO_ROOTLESS
+	spin_lock(&force_redraw_lock);
+	bool redraw = force_redraw;
+	force_redraw = false;
+	spin_unlock(&force_redraw_lock);
+#endif
+
 	const VIDEO_MODE &mode = drv->mode;
 
 	// Allocate bounding boxes for SDL_UpdateRects()
@@ -2422,7 +2433,11 @@ static void update_display_static_bbox(driver_base *drv)
 			for (uint32 j = y; j < (y + h); j++) {
 				const uint32 yb = j * bytes_per_row;
 				const uint32 dst_yb = j * dst_bytes_per_row;
+#ifdef VIDEO_ROOTLESS
+				if (redraw || memcmp(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
+#else
 				if (memcmp(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
+#endif
 					memcpy(&the_buffer_copy[yb + xb], &the_buffer[yb + xb], xs);
 					Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
 					dirty = true;
