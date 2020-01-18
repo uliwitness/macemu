@@ -1735,8 +1735,9 @@ void VideoInterrupt(void)
 		do_toggle_fullscreen();
 
 #ifdef VIDEO_ROOTLESS
+	bool f = update_display_mask(sdl_window, host_surface->w, host_surface->h);
 	spin_lock(&force_redraw_lock);
-    force_redraw |= update_display_mask(sdl_window, host_surface->w, host_surface->h);
+	force_redraw |= f;
 	spin_unlock(&force_redraw_lock);
 #endif
 	present_sdl_video();
