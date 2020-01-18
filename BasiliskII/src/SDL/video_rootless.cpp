@@ -327,8 +327,8 @@ static SDL_Rect MaskCursor() {
     // cursor data
     uint16 *TheCrsr = (uint16*)Mac2HostAddr(0x0844);
     // hotspot
-    uint16 hx = ntohs(TheCrsr[32]);
-    uint16 hy = ntohs(TheCrsr[33]);
+    uint16 hx = ntohs(TheCrsr[33]);
+    uint16 hy = ntohs(TheCrsr[32]);
     
     // apply mask
     for (int i=0; i < 16; i++) {
