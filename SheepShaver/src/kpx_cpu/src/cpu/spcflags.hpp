@@ -41,10 +41,8 @@ class basic_spcflags
 public:
 
 	basic_spcflags()
-		{ init(); }
-
-	void init()
-		{ mask = 0; lock = SPIN_LOCK_UNLOCKED; }
+		: mask(0), lock(SPIN_LOCK_UNLOCKED)
+		{ }
 
 	bool empty() const
 		{ return (mask == 0); }

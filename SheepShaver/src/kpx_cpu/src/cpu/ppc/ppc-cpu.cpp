@@ -372,7 +372,6 @@ powerpc_cpu::powerpc_cpu(task_struct *parent_task)
 #if PPC_ENABLE_JIT
 	use_jit = false;
 #endif
-	spcflags().init();
 	++ppc_refcount;
 	initialize();
 }

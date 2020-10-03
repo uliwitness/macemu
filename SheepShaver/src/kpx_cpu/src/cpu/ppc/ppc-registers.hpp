@@ -200,7 +200,7 @@ union powerpc_vr
  *		User Environment Architecture (UEA) Register Set
  **/
 
-struct powerpc_registers
+struct alignas(16) powerpc_registers
 {
 	enum {
 		GPR_BASE	= 0,

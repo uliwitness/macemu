@@ -46,16 +46,10 @@ class powerpc_cpu
 	//
 	// We can't assume (offsetof(powerpc_cpu, regs) % 16) == 0 since
 	// extra data could be inserted prior regs, e.g. pointer to vtable
-	struct {
-		powerpc_registers regs;
-		uint8 pad[16];
-	} _regs;
+	powerpc_registers _regs;
 
-	// Make sure the calculation of the current offset makes use of
-	// 'this' as this could make it simplified at compile-time
-	powerpc_registers *regs_ptr() const			{ return (powerpc_registers *)((char *)&_regs.regs + (16 - (((char *)&_regs.regs - (char *)this) % 16))); }
-	powerpc_registers const & regs() const		{ return *regs_ptr(); }
-	powerpc_registers & regs()					{ return *regs_ptr(); }
+	powerpc_registers const & regs() const		{ return _regs; }
+	powerpc_registers & regs()					{ return _regs; }
 
 #if PPC_PROFILE_REGS_USE
 	// Registers use statistics
